@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PY=""
+if [ -x ".venv/bin/python" ]; then
+  PY=".venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  PY="python3"
+elif command -v python >/dev/null 2>&1; then
+  PY="python"
+else
+  echo "[pre-commit] Nie znaleziono interpretera Pythona (python3/python)."
+  exit 1
+fi
+
+GEN_SCRIPT="generate_env_example.py"
+CHECK_SCRIPT="pre-commit-hook.py"
+
+if [ ! -f "$GEN_SCRIPT" ]; then
+  echo "[pre-commit] Brak skryptu: $GEN_SCRIPT (sprawdź ścieżkę)."
+  exit 1
+fi
+
+echo "[pre-commit] Uruchamiam $GEN_SCRIPT…"
+"$PY" "$GEN_SCRIPT"
+
+if git ls-files --error-unmatch .env.example >/dev/null 2>&1; then
+  if ! git diff --quiet -- .env.example; then
+    echo "[pre-commit] Zmiany w .env.example – dodaję do commita."
+    git add .env.example
+  fi
+fi
+
+if [ ! -f "$CHECK_SCRIPT" ]; then
+  echo "[pre-commit] Brak skryptu: $CHECK_SCRIPT (sprawdź ścieżkę)."
+  exit 1
+fi
+
+echo "[pre-commit] Uruchamiam $CHECK_SCRIPT…"
+"$PY" "$CHECK_SCRIPT"
+
+echo "[pre-commit] OK."
