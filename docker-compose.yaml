@@ -27,17 +27,41 @@ services:
       - 6881:6881 # qbittorrent torrent port
       - 6789:6789 # nzbget
       - 9696:9696 # prowlarr
+      - 5050:3000 # gluetun-gui
+      - 8000:8000 # api gluetun
     volumes:
       - ./gluetun:/gluetun
     # Make a '.env' file in the same directory.
     env_file:
       - .env
+    environment:
+      - HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={"auth":"apikey","apikey":"${GLUETUN_API_KEY}"}
     healthcheck:
       test: ping -c 1 www.google.com || exit 1
       interval: 20s
       timeout: 10s
       retries: 5
     restart: unless-stopped
+
+  gluetun-webui:
+    image: scuzza/gluetun-webui:latest
+    container_name: gluetun-webui
+    network_mode: service:gluetun
+    environment:
+      - TZ=${TZ}
+      - GLUETUN_CONTROL_URL=http://localhost:8000
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY}
+    restart: unless-stopped
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
@@ -217,15 +241,20 @@ services:
       servarrnetwork:
         ipv4_address: 172.39.0.6
 
-  jellyseerr:
-    container_name: jellyseerr
-    image: fallenbagel/jellyseerr:latest
+  # jellyseerr:
+  #   container_name: jellyseerr
+  #   image: fallenbagel/jellyseerr:latest
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    init: true
+    container_name: seerr
+    user: "3000:3000"    
     environment:
      - PUID=${PUID}
      - PGID=${PGID}
      - TZ=${TZ}
     volumes:
-     - ./jellyseerr:/app/config
+     - ./seerr:/app/config
     ports:
      - 5055:5055
     networks:
@@ -298,6 +327,31 @@ services:
       networks:
         servarrnetwork:
           ipv4_address: 172.39.0.10      
+
+  # qui:
+  #   image: ghcr.io/autobrr/qui:latest
+  #   container_name: qui
+  #   restart: unless-stopped
+  #   environment:
+  #     - TZ=${TZ}
+  #     # (opcjonalnie) log level, base url pod reverse proxy:
+  #     # - QUI__LOG_LEVEL=INFO
+  #     # - QUI__BASE_URL=/qui/
+  #   volumes:
+  #     - ./qui:/config
+  #     # (opcjonalnie) lokalny dostęp do tych samych ścieżek co qBittorrent
+  #     # potrzebny dla orphan scan / hardlinków / reflinków:
+  #     # - /data:/data
+  #   ports:
+  #     - 7476:7476
+  #   networks:
+  #     servarrnetwork:
+  #       ipv4_address: 172.39.0.11    
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "wget -q --spider http://localhost:7476/ || exit 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
 
 
 # Newer additions to this stack feel. Remove the '#' to add the service.
